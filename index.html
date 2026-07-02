@@ -203,18 +203,32 @@
         </div>
     </div>
 
-    <!-- Pokedex Modal -->
-    <div id="pokedex-modal" class="hidden fixed inset-0 bg-black z-50 flex flex-col p-4 md:p-8">
+    <!-- Pokedex Grid Modal -->
+    <div id="pokedex-modal" class="hidden fixed inset-0 bg-black z-40 flex flex-col p-4 md:p-8">
         <div class="flex justify-between items-center border-b border-green-800 pb-3 mb-4 max-w-6xl mx-auto w-full shrink-0">
             <div>
                 <h2 class="text-xl font-bold text-green-400">> POKEDEX</h2>
             </div>
-            <button id="btn-close-pokedex" class="border border-green-800 text-green-500 px-4 py-2 rounded text-sm font-bold bg-gray-900">
+            <button id="btn-close-pokedex" class="border border-green-800 text-green-500 px-4 py-2 rounded text-sm font-bold bg-gray-900 active:scale-95">
                 닫기
             </button>
         </div>
         <div class="flex-1 overflow-y-auto max-w-6xl mx-auto w-full pb-10">
-            <div id="pokedex-grid" class="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-2"></div>
+            <!-- 도감 카드 크기 확대: grid-cols-3에서 grid-cols-2(모바일), gap 늘림 -->
+            <div id="pokedex-grid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3"></div>
+        </div>
+    </div>
+
+    <!-- Pokedex Detail Floating Modal -->
+    <div id="pokemon-detail-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-md p-4">
+        <div class="bg-[#050505] border-2 border-green-700 rounded-lg w-full max-w-sm max-h-[85vh] flex flex-col shadow-[0_0_20px_rgba(0,255,0,0.2)]">
+            <div class="flex justify-between items-center p-3 border-b border-[#1a4a1a]">
+                <h3 id="detail-title" class="text-green-400 font-bold text-lg">> 상세 정보</h3>
+                <button id="btn-close-detail" class="text-green-600 hover:text-white px-3 py-1 border border-green-800 rounded bg-gray-900 active:scale-95">X</button>
+            </div>
+            <div id="detail-content" class="p-4 overflow-y-auto text-gray-300 text-sm flex flex-col gap-4">
+                <!-- 컨텐츠 동적 로딩 -->
+            </div>
         </div>
     </div>
 
@@ -288,7 +302,7 @@
         let mbtiAnswers = { 'E':0, 'I':0, 'S':0, 'N':0, 'T':0, 'F':0, 'J':0, 'P':0 };
         
         let partnerData = {
-            name: '', image: '', id: 0,
+            name: '', image: '', id: 0, speciesId: 0,
             baseAtk: 50, baseSpd: 50, baseCon: 50,
             ivAtk: 0, ivSpd: 0, ivCon: 0,
             totalBase: 150, growthTypeName: ''
@@ -312,6 +326,7 @@
             atk: 5, spd: 5, con: 5, killCount: 0, partnerName: '파트너'
         };
 
+        // 도감 데이터를 객체로 관리. (특수폼 때문에 speciesId 도 저장하여 설명을 불러올 때 사용)
         let encounteredPokedex = {};
 
         const EVENTS = [
@@ -365,6 +380,12 @@
         const pokedexModal = document.getElementById('pokedex-modal');
         const pokedexGrid = document.getElementById('pokedex-grid');
         
+        // 상세 모달 요소
+        const pokemonDetailModal = document.getElementById('pokemon-detail-modal');
+        const btnCloseDetail = document.getElementById('btn-close-detail');
+        const detailTitle = document.getElementById('detail-title');
+        const detailContent = document.getElementById('detail-content');
+        
         const btnShowFullLog = document.getElementById('btn-show-full-log');
         const btnCloseLog = document.getElementById('btn-close-log');
         const fullLogModal = document.getElementById('full-log-modal');
@@ -412,12 +433,10 @@
         function log(message, colorClass = 'text-gray-300') {
             const entryStr = `<div class="log-entry ${colorClass}"><span class="text-[#1a4a1a] mr-1">▶</span>${message}</div>`;
             
-            // Full log append
             fullLogContainer.insertAdjacentHTML('beforeend', entryStr);
             if (fullLogContainer.children.length > 100) fullLogContainer.removeChild(fullLogContainer.firstChild);
             fullLogContainer.scrollTop = fullLogContainer.scrollHeight;
 
-            // Mini log append (Keep max 3)
             miniLogContainer.insertAdjacentHTML('beforeend', entryStr);
             while (miniLogContainer.children.length > 3) {
                 miniLogContainer.removeChild(miniLogContainer.firstChild);
@@ -438,7 +457,6 @@
             uiLevel.innerText = player.level;
             uiPartnerName.innerText = player.partnerName;
             
-            // HP Bar
             uiHpText.innerText = `${Math.floor(Math.max(0, player.hp))} / ${player.maxHp}`;
             const hpPercent = Math.max(0, Math.min(100, (player.hp / player.maxHp) * 100));
             uiHpBar.style.width = `${hpPercent}%`;
@@ -446,30 +464,23 @@
             else if(hpPercent < 50) uiHpBar.style.backgroundColor = "#eab308"; 
             else uiHpBar.style.backgroundColor = "#22c55e"; 
 
-            // XP Bar
             uiXpText.innerText = `${Math.floor(player.xp)} / ${player.maxXp}`;
             const xpPercent = Math.min(100, (player.xp / player.maxXp) * 100);
             uiXpBar.style.width = `${xpPercent}%`;
 
-            // Stats update
             uiAtk.innerText = player.atk; uiSpd.innerText = player.spd; uiCon.innerText = player.con;
             const maxStat = Math.max(player.atk, player.spd, player.con, 10);
             barAtk.style.width = `${(player.atk / maxStat) * 100}%`;
             barSpd.style.width = `${(player.spd / maxStat) * 100}%`;
             barCon.style.width = `${(player.con / maxStat) * 100}%`;
 
-            // Growth Summary Text
             uiGrowthSummary.innerText = `성장: ${partnerData.growthTypeName} / ATK ${player.atk} · SPD ${player.spd} · CON ${player.con}`;
-
-            // Run Summary Text
             uiRunSummary.innerText = `처치 ${player.killCount} · 현재 Lv.${player.level} · 도감 ${Object.keys(encounteredPokedex).length}종`;
 
-            // Status & Bottom CTA Handling
             if (player.hp <= 0) {
                 uiStatusText.innerText = "기절함 / 전투불능";
                 uiStatusText.className = "text-red-500 text-xs mt-1.5 font-bold tracking-widest";
                 uiDeathOverlay.classList.remove('hidden');
-                
                 ctaAlive.classList.add('hidden');
                 btnRestart.classList.remove('hidden');
             } else {
@@ -550,7 +561,7 @@
                 const growthType = getGrowthType(atk, speed, hp);
 
                 partnerData = { 
-                    name: finalName, image: pImg, id: pkmnData.id,
+                    name: finalName, image: pImg, id: pkmnData.id, speciesId: speciesData.id,
                     baseAtk: atk, baseSpd: speed, baseCon: hp,
                     ivAtk: ivAtk, ivSpd: ivSpd, ivCon: ivHp,
                     totalBase: atk + speed + hp, growthTypeName: growthType
@@ -566,11 +577,11 @@
                 uiPartnerImg.src = pImg;
                 uiPartnerIvSummary.innerText = `개체값(IV): ${getIvRank(ivAtk)}/${getIvRank(ivSpd)}/${getIvRank(ivHp)}`;
 
-                encounteredPokedex[pkmnData.id] = { id: pkmnData.id, name: finalName, image: pImg, count: 1 };
+                encounteredPokedex[pkmnData.id] = { id: pkmnData.id, speciesId: speciesData.id, name: finalName, image: pImg, count: 1 };
 
             } catch(e) {
                 partnerData = { 
-                    name: "피카츄(임시)", image: "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/25.png", id: 25,
+                    name: "피카츄(임시)", image: "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/25.png", id: 25, speciesId: 25,
                     baseAtk: 55, baseSpd: 90, baseCon: 35, ivAtk: 31, ivSpd: 31, ivCon: 31, totalBase: 180, growthTypeName: "스피드형"
                 };
                 mbtiPName.innerText = partnerData.name;
@@ -603,6 +614,10 @@
             fullLogModal.classList.add('hidden');
         });
 
+        btnCloseDetail.addEventListener('click', () => {
+            pokemonDetailModal.classList.add('hidden');
+        });
+
         // --- GAMEPLAY LOGIC ---
         function gainXP(amount) {
             if (player.hp <= 0) return;
@@ -623,7 +638,7 @@
                 const oldMax = player.maxHp; player.maxHp = calculateMaxHp(player.con);
                 player.hp += (player.maxHp - oldMax); 
             }
-            log(`[성장] 레벨업 자동 분배: ATK+${allocated.atk}, SPD+${allocated.spd}, CON+${allocated.con}`, 'text-yellow-300 font-bold');
+            log(`[성장] 자동 분배: ATK+${allocated.atk}, SPD+${allocated.spd}, CON+${allocated.con}`, 'text-yellow-300');
         }
 
         function levelUp() {
@@ -631,7 +646,7 @@
                 player.xp -= player.maxXp; player.level++;
                 player.maxXp = Math.floor(player.maxXp * 1.5 + 10);
                 player.maxHp = calculateMaxHp(player.con); player.hp = player.maxHp;
-                log(`★ 레벨 업! Lv.${player.level} 달성! (체력 완전 회복)`, 'text-yellow-400 font-bold');
+                log(`★ 레벨 업! Lv.${player.level} 달성! (체력 회복)`, 'text-yellow-400 font-bold');
                 autoAllocateStats(3);
             }
         }
@@ -672,10 +687,11 @@
 
                     const finalName = formatPokemonName(baseKoreanName, pkmnData.name);
                     const imageUrl = pkmnData.sprites.front_default || `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${pkmnData.id}.png`;
-                    return { id: pkmnData.id, name: finalName, hp, atk, def, speed, image: imageUrl, bst: baseStatTotal };
+                    // speciesId 함께 반환 (도감 설명 호출용)
+                    return { id: pkmnData.id, speciesId: speciesData.id, name: finalName, hp, atk, def, speed, image: imageUrl, bst: baseStatTotal };
                 } catch (e) { }
             }
-            return { id: 129, name: "잉어킹", hp: 20, atk: 10, def: 55, speed: 80, image: "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/129.png", bst: 200 }; 
+            return { id: 129, speciesId: 129, name: "잉어킹", hp: 20, atk: 10, def: 55, speed: 80, image: "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/129.png", bst: 200 }; 
         }
 
         async function spawnPokemon() {
@@ -696,8 +712,7 @@
             };
             gameState.enemy.hp = gameState.enemy.maxHp;
             
-            if (!encounteredPokedex[pkmn.id]) encounteredPokedex[pkmn.id] = { id: pkmn.id, name: pkmn.name, image: pkmn.image, count: 1 };
-            else encounteredPokedex[pkmn.id].count++;
+            if (!encounteredPokedex[pkmn.id]) encounteredPokedex[pkmn.id] = { id: pkmn.id, speciesId: pkmn.speciesId, name: pkmn.name, image: pkmn.image };
             
             gameState.mode = 'COMBAT'; gameState.isFetching = false;
             
@@ -817,22 +832,83 @@
             gameState.animationFrame = requestAnimationFrame(loop);
         }
 
-        // --- POKEDEX UI ---
+        // --- POKEDEX UI & DETAIL MODAL ---
+        
+        async function openPokemonDetail(speciesId, name, imageUrl) {
+            detailTitle.innerText = `> ${name}`;
+            detailContent.innerHTML = `<div class="text-center text-green-500 animate-pulse py-10">설명 데이터를 불러오는 중입니다...</div>`;
+            pokemonDetailModal.classList.remove('hidden');
+
+            try {
+                // 특수폼이어도 speciesId를 통해 원본 포켓몬의 도감 설명을 가져올 수 있음
+                const speciesRes = await fetch(`https://pokeapi.co/api/v2/pokemon-species/${speciesId}`);
+                if(!speciesRes.ok) throw new Error("API Error");
+                const speciesData = await speciesRes.json();
+
+                const koEntries = speciesData.flavor_text_entries.filter(e => e.language.name === 'ko');
+
+                let flavorHtml = '';
+                if (koEntries.length > 0) {
+                    // 동일한 설명 텍스트를 가진 버전끼리 묶어서 출력 (도배 방지)
+                    const textMap = {};
+                    koEntries.forEach(e => {
+                        const text = e.flavor_text.replace(/\n|\f|\r/g, ' ');
+                        const version = e.version.name.toUpperCase();
+                        if (!textMap[text]) textMap[text] = [];
+                        textMap[text].push(version);
+                    });
+
+                    const formattedEntries = Object.keys(textMap).map(text => {
+                        const versions = textMap[text].join(', ');
+                        return `<div class="mb-4 bg-[#0a0a0a] p-3 rounded border border-[#1a4a1a]">
+                                    <span class="text-green-600 font-bold text-[11px] block mb-1.5">[ ${versions} ]</span>
+                                    <span class="text-gray-300 leading-relaxed">${text}</span>
+                                </div>`;
+                    });
+                    flavorHtml = formattedEntries.join('');
+                } else {
+                    flavorHtml = `<div class="text-gray-500 text-center py-4">한국어 도감 설명이 존재하지 않습니다.</div>`;
+                }
+
+                detailContent.innerHTML = `
+                    <div class="flex justify-center mb-4">
+                        <div class="w-32 h-32 bg-black border border-[#1a4a1a] rounded-lg shadow-inner flex items-center justify-center">
+                            <img src="${imageUrl}" class="w-28 h-28 pixelated object-contain" alt="${name}">
+                        </div>
+                    </div>
+                    <div class="border-t border-[#1a4a1a] pt-3">
+                        ${flavorHtml}
+                    </div>
+                `;
+            } catch (error) {
+                detailContent.innerHTML = `<div class="text-red-500 text-center py-10">데이터를 불러오는데 실패했습니다.</div>`;
+            }
+        }
+
         function renderPokedex() {
             pokedexGrid.innerHTML = '';
             const sortedKeys = Object.keys(encounteredPokedex).sort((a, b) => parseInt(a) - parseInt(b));
             if(sortedKeys.length === 0) return;
+            
             sortedKeys.forEach(key => {
                 const p = encounteredPokedex[key];
                 const card = document.createElement('div');
-                card.className = 'border border-[#1a4a1a] bg-black rounded p-2 flex flex-col items-center justify-center relative';
+                card.className = 'border border-[#1a4a1a] bg-black rounded p-2 flex flex-col items-center justify-center relative cursor-pointer group hover:bg-[#0f0f0f] transition-colors';
+                
                 const labelId = p.id > 10000 ? `SP.${p.id.toString().slice(-3)}` : `No.${p.id.toString().padStart(3, '0')}`;
+                
+                // 포켓몬 이미지 위주의 UI로 변경 및 클릭 이벤트 바인딩
                 card.innerHTML = `
-                    <span class="absolute top-1 left-1 text-[9px] text-green-700">${labelId}</span>
-                    <span class="absolute top-1 right-1 text-[9px] text-gray-500">x${p.count}</span>
-                    <img src="${p.image}" class="w-12 h-12 pixelated mt-2 opacity-90" onerror="this.src='data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI4MCIgaGVpZ2h0PSI4MCI+PHJlY3Qgd2lkdGg9IjgwIiBoZWlnaHQ9IjgwIiBmaWxsPSIjMTExIi8+PHRleHQgeD0iMjAiIHk9IjQ1IiBmaWxsPSIjMzMzIiBmb250LXNpemU9IjEyIj5OTyBJTUc8L3RleHQ+PC9zdmc+'">
-                    <div class="mt-1 text-green-500 font-bold text-center text-[10px] w-full truncate border-t border-[#1a4a1a] pt-1" title="${p.name}">${p.name}</div>
+                    <span class="absolute top-1.5 left-1.5 text-[10px] text-green-700 font-bold tracking-tighter">${labelId}</span>
+                    <div class="w-full h-20 mt-3 mb-1 flex items-center justify-center">
+                        <img src="${p.image}" class="w-full h-full object-contain pixelated opacity-90 group-hover:opacity-100 group-hover:scale-110 transition-transform duration-200" onerror="this.src='data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI4MCIgaGVpZ2h0PSI4MCI+PHJlY3Qgd2lkdGg9IjgwIiBoZWlnaHQ9IjgwIiBmaWxsPSIjMTExIi8+PHRleHQgeD0iMjAiIHk9IjQ1IiBmaWxsPSIjMzMzIiBmb250LXNpemU9IjEyIj5OTyBJTUc8L3RleHQ+PC9zdmc+'">
+                    </div>
+                    <div class="mt-auto text-green-500 font-bold text-center text-[11px] w-full truncate border-t border-[#1a4a1a] pt-1.5 pb-0.5" title="${p.name}">${p.name}</div>
                 `;
+                
+                // 카드 클릭 시 상세 정보 모달 호출
+                card.onclick = () => openPokemonDetail(p.speciesId, p.name, p.image);
+                
                 pokedexGrid.appendChild(card);
             });
         }
