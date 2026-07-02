@@ -1,0 +1,696 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>포켓몬 오토 로그라이크</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: 'Courier New', Courier, monospace;
+            background-color: #0a0a0a;
+            color: #00ff00;
+            overflow: hidden;
+        }
+        
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #1a1a1a; }
+        ::-webkit-scrollbar-thumb { background: #00ff00; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #00cc00; }
+
+        .log-entry {
+            animation: fadeIn 0.2s ease-in-out;
+            margin-bottom: 0.4rem;
+            line-height: 1.5;
+            border-bottom: 1px dashed #333;
+            padding-bottom: 0.2rem;
+        }
+        .log-entry:last-child { border-bottom: none; }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateX(-5px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+
+        .btn-stat { transition: all 0.1s; }
+        .btn-stat:active { transform: scale(0.95); }
+        .btn-stat:disabled {
+            opacity: 0.3;
+            cursor: not-allowed;
+            border-color: #333 !important;
+            color: #555 !important;
+        }
+
+        .terminal-panel {
+            background-color: #111;
+            border: 1px solid #333;
+            border-radius: 4px;
+            box-shadow: 0 0 10px rgba(0, 255, 0, 0.05);
+        }
+
+        .pixelated {
+            image-rendering: pixelated;
+        }
+    </style>
+</head>
+<body class="h-screen flex flex-col p-2 md:p-4 text-sm md:text-base bg-black relative">
+
+    <header class="mb-2 p-3 bg-black border border-green-800 rounded flex justify-between items-center shadow-[0_0_15px_rgba(0,255,0,0.1)]">
+        <div class="flex items-center gap-3">
+            <div class="text-green-500 font-bold animate-pulse">>_ SYSTEM.ONLINE</div>
+        </div>
+        <div class="flex items-center gap-4">
+            <button id="btn-toggle-pokedex" class="border border-green-600 text-green-500 hover:bg-green-900 hover:text-white px-3 py-1 rounded text-sm font-bold transition-colors">
+                [도감 열기]
+            </button>
+            <div class="text-right text-green-500 hidden md:block">
+                <h1 class="text-xl md:text-2xl font-bold tracking-widest">AUTO_BATTLER_v2.0</h1>
+            </div>
+        </div>
+    </header>
+
+    <main class="flex-1 flex flex-col md:flex-row gap-4 overflow-hidden max-w-6xl mx-auto w-full">
+        
+        <!-- Left Panel: Stats -->
+        <aside class="w-full md:w-1/3 flex flex-col gap-4 overflow-y-auto terminal-panel p-4">
+            <!-- Basic Info -->
+            <div class="p-3 mb-2 flex flex-col justify-center border border-green-900 bg-black rounded">
+                <div class="flex justify-between mb-2 border-b border-green-900 pb-1">
+                    <span class="font-bold text-green-400">> 파트너 Lv.<span id="ui-level">1</span></span>
+                    <span id="ui-status-text" class="font-bold text-green-500">탐험중</span>
+                </div>
+                
+                <!-- HP Bar -->
+                <div class="mt-2">
+                    <div class="flex justify-between text-xs mb-1 text-gray-400">
+                        <span>SYS.HP</span>
+                        <span id="ui-hp-text">25 / 25</span>
+                    </div>
+                    <div class="w-full bg-gray-900 h-3 border border-gray-700">
+                        <div id="ui-hp-bar" class="bg-green-500 h-full transition-all duration-300 w-full"></div>
+                    </div>
+                </div>
+
+                <!-- XP Bar -->
+                <div class="mt-2">
+                    <div class="flex justify-between text-xs mb-1 text-gray-400">
+                        <span>SYS.EXP</span>
+                        <span id="ui-xp-text">0 / 10</span>
+                    </div>
+                    <div class="w-full bg-gray-900 h-2 border border-gray-700">
+                        <div id="ui-xp-bar" class="bg-blue-500 h-full transition-all duration-300 w-0"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Attributes & Allocation -->
+            <div class="flex-1 flex flex-col">
+                <div class="flex justify-between items-end border-b border-gray-700 pb-2 mb-4">
+                    <h2 class="text-lg font-bold text-green-400"># ALLOCATE_STATS</h2>
+                    <div class="text-yellow-400 px-2 py-1 border border-yellow-700 rounded bg-black text-sm">
+                        PTS: <span id="ui-stat-points" class="font-bold">0</span>
+                    </div>
+                </div>
+
+                <div class="space-y-3 flex-1">
+                    <!-- ATK -->
+                    <div class="flex items-center justify-between bg-black p-2 rounded border border-gray-800">
+                        <div>
+                            <div class="font-bold text-red-400">공격 (ATK)</div>
+                            <div class="text-xs text-gray-500 mt-1">물리 피해량을 높입니다.</div>
+                        </div>
+                        <div class="flex items-center gap-3">
+                            <span id="ui-atk" class="text-xl w-6 text-right font-bold text-gray-300">5</span>
+                            <button id="btn-atk" class="btn-stat border border-red-700 text-red-400 w-8 h-8 flex items-center justify-center hover:bg-red-900 hover:text-white pb-1 rounded" disabled>+</button>
+                        </div>
+                    </div>
+                    
+                    <!-- SPD -->
+                    <div class="flex items-center justify-between bg-black p-2 rounded border border-gray-800">
+                        <div>
+                            <div class="font-bold text-blue-400">스피드 (SPD)</div>
+                            <div class="text-xs text-gray-500 mt-1">명중, 회피, 치명타율을 높입니다.</div>
+                        </div>
+                        <div class="flex items-center gap-3">
+                            <span id="ui-spd" class="text-xl w-6 text-right font-bold text-gray-300">5</span>
+                            <button id="btn-spd" class="btn-stat border border-blue-700 text-blue-400 w-8 h-8 flex items-center justify-center hover:bg-blue-900 hover:text-white pb-1 rounded" disabled>+</button>
+                        </div>
+                    </div>
+
+                    <!-- HP -->
+                    <div class="flex items-center justify-between bg-black p-2 rounded border border-gray-800">
+                        <div>
+                            <div class="font-bold text-green-400">체력 (HP)</div>
+                            <div class="text-xs text-gray-500 mt-1">최대 HP와 방어력을 높입니다.</div>
+                        </div>
+                        <div class="flex items-center gap-3">
+                            <span id="ui-con" class="text-xl w-6 text-right font-bold text-gray-300">5</span>
+                            <button id="btn-con" class="btn-stat border border-green-700 text-green-400 w-8 h-8 flex items-center justify-center hover:bg-green-900 hover:text-white pb-1 rounded" disabled>+</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Restart Button -->
+                <div class="mt-4 text-center pb-2">
+                    <button id="btn-restart" class="hidden w-full py-2 bg-black border border-green-600 text-green-500 hover:bg-green-900 hover:text-white rounded uppercase tracking-widest transition-colors text-sm font-bold">
+                        > EXECUTE REBOOT
+                    </button>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Right Panel: Event Log -->
+        <section class="flex-1 flex flex-col terminal-panel relative overflow-hidden bg-black">
+            <!-- Progress bar representing time to next action -->
+            <div class="absolute top-0 left-0 w-full h-1 bg-gray-900 z-10 border-b border-gray-800">
+                <div id="action-progress" class="h-full bg-green-500 w-0 transition-none"></div>
+            </div>
+            
+            <div id="log-container" class="flex-1 overflow-y-auto p-4 pt-6 flex flex-col text-sm md:text-base text-gray-300">
+                <div class="log-entry text-gray-600 text-center">--- LOG INITIALIZED ---</div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Pokedex Modal Overlay -->
+    <div id="pokedex-modal" class="hidden absolute inset-0 bg-black/95 z-50 flex flex-col p-4 md:p-8 backdrop-blur-sm">
+        <div class="flex justify-between items-center border-b border-green-800 pb-3 mb-4 max-w-6xl mx-auto w-full">
+            <div>
+                <h2 class="text-2xl font-bold text-green-400">>_ POKEDEX_DATA</h2>
+                <p class="text-xs text-gray-500 mt-1">발견한 포켓몬의 정보를 기록합니다.</p>
+            </div>
+            <button id="btn-close-pokedex" class="border border-red-800 text-red-500 hover:bg-red-900 hover:text-white px-4 py-2 rounded text-sm font-bold transition-colors">
+                [닫기]
+            </button>
+        </div>
+        
+        <div class="flex-1 overflow-y-auto max-w-6xl mx-auto w-full p-2">
+            <!-- Pokedex Grid Container -->
+            <div id="pokedex-grid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+                <!-- Cards will be dynamically injected here -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- GAME STATE ---
+        let gameState = {
+            isRunning: false,
+            isFetching: false,
+            tickSpeed: 1500,
+            lastTick: 0,
+            animationFrame: null,
+            mode: 'EXPLORE',
+            enemy: null
+        };
+
+        const BASE_STATS = { atk: 5, spd: 5, con: 5 };
+        
+        let player = {
+            level: 1,
+            hp: 25,
+            maxHp: 25,
+            xp: 0,
+            maxXp: 10,
+            atk: 5,
+            spd: 5,
+            con: 5,
+            statPoints: 0,
+            killCount: 0
+        };
+
+        // 도감(Pokedex) 데이터 저장소
+        let encounteredPokedex = {};
+
+        // --- DATA DICTIONARIES ---
+        const EVENTS = [
+            { text: "풀숲에서 상처약을 주웠다!", type: "heal", value: 0.3, color: "text-green-400 font-bold" },
+            { text: "잠시 나무 그늘에서 낮잠을 잤다.", type: "heal", value: 0.5, color: "text-green-400" },
+            { text: "독침붕 떼에게 쫓기다 다쳤다!", type: "damage", value: 0.15, color: "text-red-400" },
+            { text: "독 늪에 발이 빠졌다...", type: "damage", value: 0.1, color: "text-red-400" },
+            { text: "버려진 이상한 사탕 껍질을 핥았다(효과는 미미했다).", type: "xp", value: 0.2, color: "text-blue-400" },
+            { text: "바람이 기분 좋게 불어온다.", type: "none", value: 0, color: "text-gray-500" }
+        ];
+
+        // --- DOM ELEMENTS ---
+        const uiLevel = document.getElementById('ui-level');
+        const uiHpText = document.getElementById('ui-hp-text');
+        const uiHpBar = document.getElementById('ui-hp-bar');
+        const uiXpText = document.getElementById('ui-xp-text');
+        const uiXpBar = document.getElementById('ui-xp-bar');
+        const uiStatPoints = document.getElementById('ui-stat-points');
+        const uiAtk = document.getElementById('ui-atk');
+        const uiSpd = document.getElementById('ui-spd');
+        const uiCon = document.getElementById('ui-con');
+        const btnAtk = document.getElementById('btn-atk');
+        const btnSpd = document.getElementById('btn-spd');
+        const btnCon = document.getElementById('btn-con');
+        const logContainer = document.getElementById('log-container');
+        const actionProgress = document.getElementById('action-progress');
+        const btnRestart = document.getElementById('btn-restart');
+        const uiStatusText = document.getElementById('ui-status-text');
+        
+        // Pokedex DOM Elements
+        const btnTogglePokedex = document.getElementById('btn-toggle-pokedex');
+        const btnClosePokedex = document.getElementById('btn-close-pokedex');
+        const pokedexModal = document.getElementById('pokedex-modal');
+        const pokedexGrid = document.getElementById('pokedex-grid');
+
+        // --- UTILS ---
+        function rollDice(min, max) {
+            return Math.floor(Math.random() * (max - min + 1)) + min;
+        }
+
+        function log(message, colorClass = 'text-gray-300') {
+            const entry = document.createElement('div');
+            entry.className = `log-entry ${colorClass}`;
+            
+            entry.innerHTML = `<span class="text-gray-600 text-xs mr-2">▶</span>${message}`;
+            logContainer.appendChild(entry);
+            
+            if (logContainer.children.length > 50) {
+                logContainer.removeChild(logContainer.firstChild);
+            }
+            
+            logContainer.scrollTop = logContainer.scrollHeight;
+        }
+
+        function calculateMaxHp(con) {
+            return 10 + (con * 3);
+        }
+
+        function updateUI() {
+            uiLevel.innerText = player.level;
+            
+            // HP
+            uiHpText.innerText = `${Math.floor(Math.max(0, player.hp))} / ${player.maxHp}`;
+            const hpPercent = Math.max(0, Math.min(100, (player.hp / player.maxHp) * 100));
+            uiHpBar.style.width = `${hpPercent}%`;
+            
+            // HP Color
+            if(hpPercent < 25) uiHpBar.style.backgroundColor = "#ef4444"; // red
+            else if(hpPercent < 50) uiHpBar.style.backgroundColor = "#eab308"; // yellow
+            else uiHpBar.style.backgroundColor = "#22c55e"; // green
+
+            // XP
+            uiXpText.innerText = `${Math.floor(player.xp)} / ${player.maxXp}`;
+            const xpPercent = Math.min(100, (player.xp / player.maxXp) * 100);
+            uiXpBar.style.width = `${xpPercent}%`;
+
+            // Stats
+            uiAtk.innerText = player.atk;
+            uiSpd.innerText = player.spd;
+            uiCon.innerText = player.con;
+            uiStatPoints.innerText = player.statPoints;
+
+            // Buttons
+            const canAllocate = player.statPoints > 0 && gameState.isRunning && !gameState.isFetching && player.hp > 0;
+            btnAtk.disabled = !canAllocate;
+            btnSpd.disabled = !canAllocate;
+            btnCon.disabled = !canAllocate;
+
+            // Status Badge
+            if (player.hp <= 0) {
+                uiStatusText.innerText = "기절함";
+                uiStatusText.className = "font-bold text-red-500";
+            } else if (gameState.isFetching) {
+                uiStatusText.innerText = "탐색중...";
+                uiStatusText.className = "font-bold text-yellow-500 animate-pulse";
+            } else {
+                uiStatusText.innerText = gameState.mode === 'COMBAT' ? "전투중!" : "탐험중";
+                uiStatusText.className = gameState.mode === 'COMBAT' ? "font-bold text-red-500 animate-pulse" : "font-bold text-green-500";
+            }
+        }
+
+        function gainXP(amount) {
+            if (player.hp <= 0) return;
+            player.xp += amount;
+            
+            if (player.xp >= player.maxXp) {
+                levelUp();
+            }
+            updateUI();
+        }
+
+        function levelUp() {
+            while (player.xp >= player.maxXp) {
+                player.xp -= player.maxXp;
+                player.level++;
+                player.statPoints += 3;
+                
+                player.maxXp = Math.floor(player.maxXp * 1.5 + 10);
+                
+                player.maxHp = calculateMaxHp(player.con);
+                player.hp = player.maxHp;
+
+                log(`★ 레벨 업! Lv.${player.level}이 되었다! (스탯 포인트 +3, 체력 모두 회복)`, 'text-yellow-400 font-bold border border-yellow-800 bg-yellow-900/30 p-1');
+            }
+        }
+
+        function allocateStat(statName) {
+            if (player.statPoints <= 0 || player.hp <= 0) return;
+            
+            player[statName]++;
+            player.statPoints--;
+            
+            if (statName === 'con') {
+                const oldMax = player.maxHp;
+                player.maxHp = calculateMaxHp(player.con);
+                player.hp += (player.maxHp - oldMax); 
+            }
+
+            const statKor = statName === 'atk' ? '공격(ATK)' : statName === 'spd' ? '스피드(SPD)' : '체력(HP)';
+            log(`포켓몬의 ${statKor}이(가) 올라갔다!`, 'text-blue-300 font-bold');
+            updateUI();
+        }
+
+        // --- POKEAPI REST FETCH ---
+        async function fetchRandomPokemon() {
+            // PokeAPI 1세대 ~ 8세대까지 중 무작위 하나 (1 ~ 898)
+            const randomId = rollDice(1, 898);
+            
+            try {
+                const [pkmnRes, speciesRes] = await Promise.all([
+                    fetch(`https://pokeapi.co/api/v2/pokemon/${randomId}`),
+                    fetch(`https://pokeapi.co/api/v2/pokemon-species/${randomId}`)
+                ]);
+
+                if (!pkmnRes.ok || !speciesRes.ok) {
+                    throw new Error(`HTTP error! status: ${pkmnRes.status}`);
+                }
+
+                const pkmnData = await pkmnRes.json();
+                const speciesData = await speciesRes.json();
+                
+                // 한국어 이름 추출
+                const koNameEntry = speciesData.names.find(n => n.language.name === 'ko');
+                const koreanName = koNameEntry ? koNameEntry.name : pkmnData.name;
+                
+                // 종족값 추출
+                let hp = 50, atk = 50, def = 50, speed = 50;
+                pkmnData.stats.forEach(s => {
+                    if(s.stat.name === 'hp') hp = s.base_stat;
+                    if(s.stat.name === 'attack') atk = s.base_stat;
+                    if(s.stat.name === 'defense') def = s.base_stat;
+                    if(s.stat.name === 'speed') speed = s.base_stat;
+                });
+                
+                // 도감을 위한 이미지 URL 추출 (도트 스프라이트)
+                const imageUrl = pkmnData.sprites.front_default || `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${randomId}.png`;
+
+                return { id: randomId, name: koreanName, hp, atk, def, speed, image: imageUrl };
+            } catch (e) {
+                console.warn("API Fetch Error (using fallback):", e);
+                // 에러 시 폴백 몬스터
+                return { id: 0, name: "미싱노(버그)", hp: 33, atk: 136, def: 0, speed: 29, image: "" }; 
+            }
+        }
+
+        async function spawnPokemon() {
+            gameState.isFetching = true; // Pause game logic visually
+            updateUI();
+            
+            // API 호출
+            const pkmn = await fetchRandomPokemon();
+            
+            // 플레이어 레벨과 포켓몬 종족값을 기반으로 적 스탯 스케일링
+            const pLvl = player.level;
+            
+            gameState.enemy = {
+                id: pkmn.id,
+                name: pkmn.name,
+                level: pLvl,
+                maxHp: Math.floor((pkmn.hp / 15) * pLvl + 10),
+                hp: 0,
+                atk: Math.floor((pkmn.atk / 20) * pLvl + 3),
+                spd: Math.floor((pkmn.speed / 20) * pLvl + 3),
+                image: pkmn.image
+            };
+            gameState.enemy.hp = gameState.enemy.maxHp;
+            
+            // 도감에 데이터 기록
+            if (pkmn.id !== 0) { // 미싱노(버그) 제외
+                if (!encounteredPokedex[pkmn.id]) {
+                    encounteredPokedex[pkmn.id] = {
+                        id: pkmn.id,
+                        name: pkmn.name,
+                        image: pkmn.image,
+                        count: 1
+                    };
+                } else {
+                    encounteredPokedex[pkmn.id].count++;
+                }
+            }
+            
+            gameState.mode = 'COMBAT';
+            gameState.isFetching = false;
+            
+            log(`앗! 야생의 <b class="text-red-400">${gameState.enemy.name}</b>(이)가 튀어나왔다!`, 'text-red-400 text-lg border border-red-900 bg-red-900/20 p-1 rounded');
+            updateUI();
+        }
+
+        // --- COMBAT LOGIC ---
+        function calculateDamage(attackerAtk, defenderCon) {
+            let dmg = attackerAtk * (rollDice(85, 100) / 100);
+            let reduction = defenderCon * 0.5; // 방어력 역할
+            let finalDmg = Math.floor(dmg - reduction);
+            return Math.max(1, finalDmg);
+        }
+
+        function calculateHitChance(attackerSpd, defenderSpd) {
+            let chance = 85 + ((attackerSpd - defenderSpd) * 2);
+            return Math.min(100, Math.max(25, chance));
+        }
+
+        function handleCombatTick() {
+            let e = gameState.enemy;
+            
+            // Player attacks Enemy
+            let pLog = "";
+            let pColor = "";
+            
+            if (rollDice(1, 100) <= calculateHitChance(player.spd, e.spd)) {
+                let dmg = calculateDamage(player.atk, 0); 
+                
+                // Crit chance based on SPD
+                let isCrit = false;
+                if(rollDice(1, 100) <= Math.min(25, player.spd)) {
+                    dmg = Math.floor(dmg * 1.5);
+                    isCrit = true;
+                }
+                
+                e.hp -= dmg;
+                pLog = `내 포켓몬의 공격! ${e.name}에게 ${dmg}의 데미지.`;
+                if(isCrit) pLog += ` <span class="text-red-400 font-bold">급소에 맞았다!</span>`;
+                pColor = "text-blue-300";
+            } else {
+                pLog = `내 포켓몬의 공격은 빗나갔다!`;
+                pColor = "text-gray-500";
+            }
+            log(pLog, pColor);
+
+            if (e.hp <= 0) {
+                // Enemy faints
+                const xpGain = Math.floor(8 + (e.level * 2));
+                log(`야생의 ${e.name}(은)는 쓰러졌다!`, 'text-red-400 font-bold');
+                log(`${xpGain}의 경험치를 얻었다.`, 'text-blue-400');
+                player.killCount++;
+                gainXP(xpGain);
+                gameState.enemy = null;
+                gameState.mode = 'EXPLORE';
+                return;
+            }
+
+            // Enemy attacks Player
+            if (rollDice(1, 100) <= calculateHitChance(e.spd, player.spd)) {
+                let dmg = calculateDamage(e.atk, player.con);
+                player.hp -= dmg;
+                log(`야생 ${e.name}의 공격! ${dmg}의 데미지를 입었다.`, 'text-red-400');
+            } else {
+                log(`야생 ${e.name}의 공격을 가볍게 피했다!`, 'text-green-400');
+            }
+
+            if (player.hp <= 0) {
+                handleDeath();
+            }
+        }
+
+        async function handleExplorationTick() {
+            if (rollDice(1, 100) <= 40) {
+                await spawnPokemon();
+            } else {
+                const ev = EVENTS[rollDice(0, EVENTS.length - 1)];
+                let resultStr = ev.text;
+                
+                if (ev.type === 'heal') {
+                    const healAmount = Math.floor(player.maxHp * ev.value);
+                    player.hp = Math.min(player.maxHp, player.hp + healAmount);
+                    resultStr += ` (HP +${healAmount})`;
+                } 
+                else if (ev.type === 'damage') {
+                    const dmgAmount = Math.floor(player.maxHp * ev.value);
+                    player.hp -= dmgAmount;
+                    resultStr += ` (HP -${dmgAmount})`;
+                    if (player.hp <= 0) {
+                        log(resultStr, ev.color);
+                        handleDeath();
+                        return;
+                    }
+                }
+                else if (ev.type === 'xp') {
+                    const xpAmount = Math.floor(player.maxXp * ev.value);
+                    resultStr += ` (EXP +${xpAmount})`;
+                    log(resultStr, ev.color); 
+                    gainXP(xpAmount);
+                    return;
+                }
+
+                log(resultStr, ev.color);
+            }
+        }
+
+        function handleDeath() {
+            player.hp = 0;
+            gameState.mode = 'DEAD';
+            gameState.isRunning = false;
+            
+            log("=========================", "text-red-500 font-bold");
+            log("내 포켓몬은 더 이상 싸울 수 없다!", "text-red-500 font-bold text-lg");
+            log("눈앞이 깜깜해졌다...", "text-gray-400 font-bold");
+            log(`최종 레벨: Lv.${player.level}`, "text-blue-400");
+            log(`쓰러뜨린 포켓몬 수: ${player.killCount}마리`, "text-blue-400");
+            log(`도감에 기록된 종류: ${Object.keys(encounteredPokedex).length}종`, "text-green-400");
+            log("=========================", "text-red-500 font-bold");
+            
+            actionProgress.style.width = '0%';
+            btnRestart.classList.remove('hidden');
+            updateUI();
+        }
+
+        async function gameTick() {
+            if (!gameState.isRunning || player.hp <= 0 || gameState.isFetching) return;
+
+            if (gameState.mode === 'EXPLORE') {
+                await handleExplorationTick();
+            } else if (gameState.mode === 'COMBAT') {
+                handleCombatTick();
+            }
+            
+            updateUI();
+        }
+
+        function loop(timestamp) {
+            if (!gameState.isRunning) {
+                actionProgress.style.width = '0%';
+                return;
+            }
+
+            if (!gameState.lastTick) gameState.lastTick = timestamp;
+            const delta = timestamp - gameState.lastTick;
+
+            if(!gameState.isFetching) {
+                const progressPercent = Math.min(100, (delta / gameState.tickSpeed) * 100);
+                actionProgress.style.width = `${progressPercent}%`;
+                actionProgress.className = "h-full bg-green-500 w-0 transition-none";
+            } else {
+                actionProgress.style.width = `100%`;
+                actionProgress.className = "h-full bg-yellow-500 w-full animate-pulse transition-none";
+            }
+
+            if (delta >= gameState.tickSpeed && !gameState.isFetching) {
+                gameTick();
+                gameState.lastTick = timestamp;
+            }
+
+            gameState.animationFrame = requestAnimationFrame(loop);
+        }
+
+        function startGame() {
+            // Reset state
+            player = {
+                level: 1,
+                hp: calculateMaxHp(BASE_STATS.con),
+                maxHp: calculateMaxHp(BASE_STATS.con),
+                xp: 0,
+                maxXp: 10,
+                atk: BASE_STATS.atk,
+                spd: BASE_STATS.spd,
+                con: BASE_STATS.con,
+                statPoints: 0,
+                killCount: 0
+            };
+            
+            gameState = {
+                ...gameState,
+                isRunning: true,
+                isFetching: false,
+                mode: 'EXPLORE',
+                enemy: null,
+                lastTick: 0
+            };
+
+            logContainer.innerHTML = '';
+            log("시스템 리부트 완료. 포켓몬 회복됨.", "text-green-400 font-bold");
+            log("탐험 프로토콜 재가동...", "text-gray-400");
+            
+            btnRestart.classList.add('hidden');
+            updateUI();
+            
+            if (gameState.animationFrame) cancelAnimationFrame(gameState.animationFrame);
+            gameState.animationFrame = requestAnimationFrame(loop);
+        }
+
+        // --- POKEDEX UI LOGIC ---
+        function renderPokedex() {
+            pokedexGrid.innerHTML = '';
+            const sortedKeys = Object.keys(encounteredPokedex).sort((a, b) => parseInt(a) - parseInt(b));
+            
+            if(sortedKeys.length === 0) {
+                pokedexGrid.innerHTML = '<div class="text-gray-500 col-span-full text-center mt-10 p-4 border border-gray-800 rounded">아직 조우한 포켓몬이 없습니다.</div>';
+                return;
+            }
+
+            sortedKeys.forEach(key => {
+                const p = encounteredPokedex[key];
+                const card = document.createElement('div');
+                card.className = 'border border-green-800 bg-gray-900 rounded p-3 flex flex-col items-center justify-center relative hover:bg-gray-800 transition-colors shadow-[0_0_8px_rgba(0,255,0,0.05)] group';
+                
+                // 3자리 포맷팅 (ex: No.001)
+                const formattedId = p.id.toString().padStart(3, '0');
+                
+                card.innerHTML = `
+                    <span class="absolute top-2 left-2 text-xs text-green-700 font-bold">No.${formattedId}</span>
+                    <span class="absolute top-2 right-2 text-xs text-gray-500">x${p.count}</span>
+                    <div class="w-20 h-20 my-2 flex items-center justify-center">
+                        <img src="${p.image}" alt="${p.name}" class="w-full h-full object-contain pixelated opacity-80 group-hover:opacity-100 transition-opacity" onerror="this.src='data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI4MCIgaGVpZ2h0PSI4MCI+PHJlY3Qgd2lkdGg9IjgwIiBoZWlnaHQ9IjgwIiBmaWxsPSIjMTExIi8+PHRleHQgeD0iMjAiIHk9IjQ1IiBmaWxsPSIjMzMzIiBmb250LXNpemU9IjEyIj5OTyBJTUc8L3RleHQ+PC9zdmc+'">
+                    </div>
+                    <div class="mt-1 text-green-400 font-bold text-center text-sm w-full truncate border-t border-green-900 pt-2">${p.name}</div>
+                `;
+                pokedexGrid.appendChild(card);
+            });
+        }
+
+        btnTogglePokedex.addEventListener('click', () => {
+            renderPokedex();
+            pokedexModal.classList.remove('hidden');
+        });
+
+        btnClosePokedex.addEventListener('click', () => {
+            pokedexModal.classList.add('hidden');
+        });
+
+        // Event Listeners
+        btnAtk.addEventListener('click', () => allocateStat('atk'));
+        btnSpd.addEventListener('click', () => allocateStat('spd'));
+        btnCon.addEventListener('click', () => allocateStat('con'));
+        btnRestart.addEventListener('click', startGame);
+
+        // Init UI and start
+        updateUI();
+        setTimeout(startGame, 1000);
+
+    </script>
+</body>
+</html>
