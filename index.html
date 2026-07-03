@@ -66,9 +66,16 @@
             from { transform: translateY(100%); }
             to { transform: translateY(0); }
         }
+
+        /* 모바일 하단 안전 영역(Safe Area) 처리 */
+        @supports (padding-bottom: env(safe-area-inset-bottom)) {
+            .pb-safe {
+                padding-bottom: calc(env(safe-area-inset-bottom) + 0.75rem) !important;
+            }
+        }
     </style>
 </head>
-<body class="h-screen w-full flex flex-col text-sm md:text-base bg-[#050505] relative select-none">
+<body class="h-[100dvh] w-full flex flex-col text-sm md:text-base bg-[#050505] relative select-none">
 
     <header class="h-14 px-4 bg-black border-b border-[#1a4a1a] flex justify-between items-center shrink-0 z-20 shadow-md">
         <div class="flex items-center gap-2">
@@ -83,7 +90,7 @@
     <main class="flex-1 flex flex-col gap-3 p-3 overflow-y-auto opacity-0 transition-opacity duration-1000 w-full max-w-2xl mx-auto" id="main-game">
         
         <section class="terminal-card p-4 relative flex flex-col shrink-0">
-            <div id="ui-death-overlay" class="hidden absolute inset-0 bg-red-900/90 rounded-lg flex flex-col items-center justify-center z-20 backdrop-blur-[2px]">
+            <div id="ui-death-overlay" style="display: none;" class="absolute inset-0 bg-red-900/90 rounded-lg flex flex-col items-center justify-center z-20 backdrop-blur-[2px]">
                 <span class="text-red-300 font-bold text-xl mb-1 tracking-widest">SYSTEM_FAILURE</span>
                 <span class="text-red-200 text-xs">회복 후 다시 탐험할 수 있습니다</span>
             </div>
@@ -176,13 +183,13 @@
         </section>
     </main>
 
-    <footer class="w-full shrink-0 bg-[#050505] p-3 border-t border-[#1a4a1a] z-20 pb-safe max-w-2xl mx-auto">
+    <footer class="w-full shrink-0 bg-[#050505] p-4 pb-6 border-t border-[#1a4a1a] z-20 pb-safe max-w-2xl mx-auto">
         <div id="cta-alive" class="w-full h-14 bg-black border border-[#1a4a1a] rounded-lg relative overflow-hidden flex items-center justify-center">
             <div id="action-progress" class="absolute left-0 top-0 h-full bg-[#0a2a0a] w-0 transition-none z-0"></div>
             <span id="cta-alive-text" class="relative z-10 text-green-500 font-bold tracking-widest text-sm animate-pulse">자동 탐험 진행 중...</span>
         </div>
         
-        <button id="btn-restart" class="hidden w-full h-14 bg-red-900/30 border border-red-600 text-red-400 hover:bg-red-800 hover:text-white rounded-lg uppercase tracking-widest transition-colors font-bold text-sm shadow-[0_0_15px_rgba(255,0,0,0.2)] active:scale-95">
+        <button id="btn-restart" style="display: none;" class="w-full h-14 bg-red-900/30 border border-red-600 text-red-400 hover:bg-red-800 hover:text-white rounded-lg flex items-center justify-center uppercase tracking-widest transition-colors font-bold text-sm shadow-[0_0_15px_rgba(255,0,0,0.2)] active:scale-95">
             [ 회복 후 다시 탐험 ]
         </button>
     </footer>
@@ -475,9 +482,14 @@
 
             if (player.hp <= 0) {
                 uiStatusText.innerText = "기절함 / 전투불능"; uiStatusText.className = "text-red-500 text-xs mt-1.5 font-bold tracking-widest";
-                uiDeathOverlay.classList.remove('hidden'); ctaAlive.classList.add('hidden'); btnRestart.classList.remove('hidden');
+                uiDeathOverlay.style.display = 'flex'; 
+                ctaAlive.style.display = 'none'; 
+                btnRestart.style.display = 'flex';
             } else {
-                uiDeathOverlay.classList.add('hidden'); btnRestart.classList.add('hidden'); ctaAlive.classList.remove('hidden');
+                uiDeathOverlay.style.display = 'none'; 
+                btnRestart.style.display = 'none'; 
+                ctaAlive.style.display = 'flex';
+                
                 if (gameState.isFetching) {
                     uiStatusText.innerText = "데이터 통신 중..."; uiStatusText.className = "text-yellow-500 text-xs mt-1.5 font-bold tracking-widest animate-pulse";
                     ctaAliveText.innerText = "동기화 프로토콜 작동 중..."; ctaAliveText.className = "relative z-10 text-yellow-500 font-bold tracking-widest text-sm animate-pulse";
