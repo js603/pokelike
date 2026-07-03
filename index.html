@@ -293,7 +293,6 @@
         let currentQuestion = 0;
         let mbtiAnswers = { 'E':0, 'I':0, 'S':0, 'N':0, 'T':0, 'F':0, 'J':0, 'P':0 };
         
-        // base profile (원본 유지를 위해 게임 중 변경 금지)
         let partnerData = {
             name: '', image: '', id: 0, speciesId: 0, types: [], moves: [],
             baseAtk: 50, baseSpd: 50, baseCon: 50, ivAtk: 0, ivSpd: 0, ivCon: 0,
@@ -652,9 +651,8 @@
         btnCloseLog.addEventListener('click', () => { fullLogModal.classList.add('hidden'); });
         btnCloseDetail.addEventListener('click', () => { pokemonDetailModal.classList.add('hidden'); });
 
-        // --- GAMEPLAY LOGIC (ASYNC SYNC PATCH) ---
+        // --- GAMEPLAY LOGIC (ASYNC SYNC DEADLOCK PATCH v6.61) ---
         
-        // 🌟 모든 경험치 획득은 await으로 묶여 이벤트가 씹히는 현상 방지
         async function gainXP(amount) {
             if (player.hp <= 0) return;
             player.xp += amount; 
@@ -678,7 +676,7 @@
         }
 
         async function checkAndExecuteEvolution() {
-            // 🌟 원본 partnerData가 아닌 이번 생의 player 객체 진화 루트 참조
+            // 🌟 원본 데이터 파괴(shift) 방지 및 재시작 시 정상 복구를 위해 player 인스턴스 사용
             if (!player.evolutionPath || player.evolutionPath.length === 0) return;
             const nextStage = player.evolutionPath[0];
             
@@ -687,6 +685,8 @@
                 const oldName = player.partnerName;
                 log(`[!] 오잉!? ${oldName}의 상태가...!!`, 'text-pink-500 font-bold border border-pink-900 bg-pink-950/20 p-1 rounded animate-pulse');
                 
+                await new Promise(resolve => setTimeout(resolve, 800));
+
                 try {
                     const speciesRes = await fetch(`https://pokeapi.co/api/v2/pokemon-species/${nextStage.speciesId}`);
                     const speciesData = await speciesRes.json();
@@ -703,7 +703,6 @@
                     const pkmnTypes = pkmnData.types.length > 0 ? pkmnData.types.map(t => t.type.name) : ['normal'];
                     const newMoves = await fetchPokemonMoves(pkmnData.moves, 3); 
 
-                    // 🌟 원본을 해치지 않고 이번 생(Player)의 데이터만 교체
                     player.partnerName = finalName; 
                     player.types = pkmnTypes; 
                     player.moves = newMoves;
@@ -717,14 +716,13 @@
                     
                     log(`[진화 완료] 축하합니다! ${finalName}(으)로 진화했습니다! (능력치 보너스 +5)`, 'text-yellow-400 font-bold');
                     
-                    // 진화가 완료된 단계는 현재 게임 루트에서만 제거
                     player.evolutionPath.shift();
 
                 } catch (err) { 
                     log(`[시스템 오류] 진화 데이터 동기화 실패.`, 'text-red-500'); 
                 } finally {
-                    // 🌟 무조건 락이 풀리도록 보장
-                    if (gameState.mode !== 'COMBAT') gameState.isFetching = false; 
+                    // 🌟 교착상태(Deadlock)의 원인이었던 불필요한 조건문을 제거하여 무조건 락 해제
+                    gameState.isFetching = false; 
                     updateUI();
                 }
             }
@@ -738,7 +736,6 @@
                 log(`★ 레벨 업! Lv.${player.level} 달성! (체력 완전 회복)`, 'text-yellow-400 font-bold');
                 autoAllocateStats(4);
                 
-                // 🌟 순차적 진화 체크 진행
                 await checkAndExecuteEvolution();
             }
         }
@@ -836,6 +833,7 @@
         }
         function calculateHitChance(attackerSpd, defenderSpd) { return Math.min(100, Math.max(25, 85 + ((attackerSpd - defenderSpd) * 2))); }
 
+        // 🌟 순차적 이벤트 처리를 위해 async로 감쌈
         async function handleCombatTick() {
             let e = gameState.enemy; let pLog = "";
             
@@ -879,7 +877,7 @@
                 const xpGain = Math.floor(15 + (e.level * 6) + (e.bst / 15) + (e.isAlpha ? 25 : 0));
                 log(`야생 ${e.name} 쓰러짐! (+${xpGain} EXP)`, 'text-red-400');
                 player.killCount++; 
-                await gainXP(xpGain); // 🌟 전투 보상 완벽 비동기 처리
+                await gainXP(xpGain); // 비동기 대기
                 gameState.enemy = null; gameState.mode = 'EXPLORE';
                 return;
             }
@@ -920,12 +918,7 @@
         async function handleExplorationTick() {
             const isLowHp = player.hp < (player.maxHp * 0.6);
             if (rollDice(1, 100) <= (isLowHp ? 15 : 35)) {
-                gameState.isFetching = true; 
-                try {
-                    await spawnPokemon();
-                } finally {
-                    if(gameState.mode !== 'COMBAT') gameState.isFetching = false;
-                }
+                await spawnPokemon();
             } else {
                 const ev = EVENTS[rollDice(0, EVENTS.length - 1)];
                 let resultStr = ev.text;
@@ -941,7 +934,7 @@
                     const xpAmount = Math.floor(player.maxXp * 0.25);
                     resultStr += ` (EXP +${xpAmount})`; 
                     log(resultStr, ev.color);
-                    await gainXP(xpAmount); // 🌟 탐험 보상 완벽 비동기 처리
+                    await gainXP(xpAmount); // 비동기 대기
                     return;
                 }
                 log(resultStr, ev.color);
@@ -982,7 +975,6 @@
         }
 
         function startGame(isFirstStart = false) {
-            // 🌟 재시작 시 원본 보존을 위한 Deep Copy 적용
             player = {
                 level: 1, hp: calculateMaxHp(partnerData.baseCon), maxHp: calculateMaxHp(partnerData.baseCon),
                 xp: 0, maxXp: 15, atk: partnerData.baseAtk, spd: partnerData.baseSpd, con: partnerData.baseCon,
@@ -994,7 +986,7 @@
             gameState = { ...gameState, isRunning: true, isFetching: false, mode: 'EXPLORE', enemy: null, lastTick: 0 };
             miniLogContainer.innerHTML = ''; fullLogContainer.innerHTML = '';
             
-            uiPartnerImg.src = player.image; // UI 원본 이미지 초기화
+            uiPartnerImg.src = player.image; 
             
             if (isFirstStart) log(`[시스템] 파트너 [${player.partnerName}]와 모험 시작!`, "text-yellow-400 font-bold");
             else log(`[시스템] 포켓몬 센터 회복 완료. 재탐험 시작.`, "text-green-400 font-bold");
